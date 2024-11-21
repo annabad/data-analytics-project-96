@@ -1,95 +1,91 @@
 --Витрина для расчета расходов на рекламу по модели атрибуции Last Paid Click
-with last_visits_leads as (
+with tab1 as (
     select
-        s.visitor_id,
-        max(s.visit_date) as last_visit
+        *,
+        row_number()
+            over (partition by s.visitor_id order by s.visit_date desc)
+        as rn
     from sessions as s
-    left join leads as l
-        on
-            s.visitor_id = l.visitor_id
-            and s.medium <> 'organic'
-    group by 1
+    left join leads on s.visitor_id = leads.visitor_id
+where medium <> 'organic'
 ),
 
 last_paid_click as (
-    select
-        s.visitor_id,
-        s.visit_date,
-        s.source as utm_source,
-        s.medium as utm_medium,
-        s.campaign as utm_campaign,
-        s.content as utm_content,
-        l.lead_id,
-        l.created_at,
-        l.amount,
-        l.closing_reason,
-        l.status_id
-    from sessions as s 
-    join last_visits_leads as lvl
-        on
-            lvl.visitor_id = s.visitor_id  and lvl.last_visit = s.visit_date
-    join leads l
-        on
-            s.visitor_id = l.visitor_id and s.visit_date < l.created_at
-    where s.medium <> 'organic'
+select
+    visitor_id,
+    visit_date,
+    source as utm_source,
+    medium as utm_medium,
+    campaign as utm_campaign,
+    lead_id,
+    created_at,
+    amount,
+    closing_reason,
+    status_id
+from tab1
+where rn = 1 and visit_date < coalesce(created_at, '2023-07-01')
+order by
+    amount desc nulls last,
+    visit_date asc,
+    utm_source asc,
+    utm_medium asc,
+    utm_campaign asc
 ),
 
 ads_tab as (
-    select
-        utm_source,
-        utm_medium,
-        utm_campaign,
-        utm_content,
-        daily_spent,
-        campaign_date
-    from ya_ads
-    union
-    select
-        utm_source,
-        utm_medium,
-        utm_campaign,
-        utm_content,
-        daily_spent,
-        campaign_date
-    from vk_ads
-),
-
-tab as (
-    select
-        lpc.visit_date,
-        lpc.visitor_id,
-        lpc.lead_id,
-        lpc.utm_source,
-        lpc.utm_medium,
-        lpc.utm_campaign,
-        ad.daily_spent,
-        count(lpc.closing_reason) filter (
-            where lpc.status_id = 142
-        ) as purchases_count,
-        sum(lpc.amount) as revenue --деньги с успешно закрытых лидов
-    from last_paid_click as lpc
-    inner join ads_tab as ad
-        on
-            lpc.utm_source = ad.utm_source and lpc.utm_medium = ad.utm_medium
-            and lpc.utm_campaign = ad.utm_campaign 
-            and lpc.utm_content = ad.utm_content
-            and to_char(lpc.visit_date, 'YYYY-MM-DD')
-            = to_char(ad.campaign_date, 'YYYY-MM-DD')
-    group by 1, 2, 3, 4, 5, 6, 7
-)
-
 select
-    to_char(visit_date, 'YYYY-MM-DD') as visit_date,
+    date(campaign_date) as campaign_date,
     utm_source,
     utm_medium,
     utm_campaign,
-    count(visitor_id) as visitors_count,
-    sum(daily_spent) as total_cost,
-    count(lead_id) as leads_count, 
-    sum(purchases_count) as purchases_count,
-    sum(revenue) as revenue
-from tab
+    sum(daily_spent) as total_cost
+from ya_ads
 group by 1, 2, 3, 4
+union
+select
+    date(campaign_date) as campaign_date,
+    utm_source,
+    utm_medium,
+    utm_campaign,
+    sum(daily_spent) as total_cost
+from vk_ads
+group by 1, 2, 3, 4
+order by 1
+),
+
+aggregate_lpc as (
+select
+    date(visit_date) as visit_date,
+    lpc.utm_source,
+    lpc.utm_medium,
+    lpc.utm_campaign,
+    count(distinct lpc.visitor_id) as visitors_count,
+    count(lpc.lead_id) as leads_count,
+    count(lpc.closing_reason) filter (
+        where lpc.status_id = 142
+    ) as purchases_count,
+    sum(lpc.amount) as revenue
+from last_paid_click as lpc
+group by 1, 2, 3, 4
+)
+
+select
+agr.visit_date,
+agr.utm_source,
+agr.utm_medium,
+agr.utm_campaign,
+agr.visitors_count,
+ads.total_cost,
+agr.leads_count,
+agr.purchases_count,
+agr.revenue
+from aggregate_lpc as agr
+left join ads_tab as ads
+on
+    agr.utm_source = ads.utm_source and agr.utm_medium = ads.utm_medium
+    and agr.utm_campaign = ads.utm_campaign
+    and agr.visit_date = ads.campaign_date
 order by
-    revenue desc nulls last, visit_date asc, visitors_count desc, 
-    utm_source asc, utm_medium asc, utm_campaign asc;
+revenue desc nulls last, visit_date asc, visitors_count desc,
+utm_source asc, utm_medium asc, utm_campaign asc
+limit 15;
