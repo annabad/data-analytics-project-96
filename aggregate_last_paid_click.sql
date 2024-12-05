@@ -83,7 +83,7 @@ agr.leads_count,
 agr.purchases_count,
 agr.revenue
 from aggregate_lpc as agr
-inner join ads_tab as ads
+left join ads_tab as ads
 on
     agr.utm_source = ads.utm_source and agr.utm_medium = ads.utm_medium
     and agr.utm_campaign = ads.utm_campaign
