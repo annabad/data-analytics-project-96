@@ -401,4 +401,3 @@ INNER JOIN campaigns_count AS cc
 GROUP BY
     cc.campaign_date,
     cc.campaigns_cnt;
-
