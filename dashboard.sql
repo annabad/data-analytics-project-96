@@ -3,12 +3,12 @@ SELECT count(DISTINCT visitor_id) AS visitors_count
 FROM sessions;
 
 SELECT
-    date(visit_date),
+    date(visit_date) AS visit_date,
     count(DISTINCT visitor_id) AS visitors_count
 FROM sessions
 GROUP BY date(visit_date);
 
-SELECT DISTINCT
+SELECT 
     extract(WEEK FROM visit_date) AS visit_week,
     count(DISTINCT visitor_id) AS visitors_count
 FROM sessions
@@ -17,7 +17,7 @@ GROUP BY extract(WEEK FROM visit_date);
 
 -- Какие каналы их приводят на сайт? Хочется видеть по дням/неделям/месяцам
 -- по дням
-SELECT DISTINCT
+SELECT
     date(visit_date) AS visit_date,
     source,
     count(DISTINCT visitor_id) AS uniq_visitors
@@ -25,7 +25,7 @@ FROM sessions
 GROUP BY date(visit_date), source;
 
 -- по неделям
-SELECT DISTINCT
+SELECT 
     extract(WEEK FROM visit_date) AS visit_week,
     source,
     count(DISTINCT visitor_id) AS uniq_visitors
@@ -34,8 +34,8 @@ GROUP BY extract(WEEK FROM visit_date), source;
 
 -- за месяц
 
-SELECT DISTINCT
-    extract(MONTH FROM visit_date) AS month,
+SELECT
+    extract(MONTH FROM visit_date) AS visit_month,
     source,
     count(DISTINCT visitor_id) AS uniq_visitors
 FROM sessions
@@ -47,8 +47,8 @@ FROM leads;
 
 -- Расчет конверсий по модели аттрибуции Last Paid Click
 
-with tab1 as (
-    select
+WITH tab1 AS (
+    SELECT
         s.visitor_id,
         s.visit_date,
         s.source,
@@ -61,112 +61,113 @@ with tab1 as (
         l.learning_format,
         l.status_id,
         row_number()
-            over (partition by s.visitor_id order by s.visit_date desc)
-        as rn
-    from sessions as s
-    left join leads as l on s.visitor_id = l.visitor_id
-    where s.medium <> 'organic'
+        OVER (PARTITION BY s.visitor_id ORDER BY s.visit_date DESC)
+        AS rn
+    FROM sessions AS s
+    LEFT JOIN leads AS l ON s.visitor_id = l.visitor_id
+    WHERE s.medium != 'organic'
 ),
 
 last_paid_click as (
-    select
+    SELECT
         visitor_id,
         visit_date,
-        source as utm_source,
-        medium as utm_medium,
-        campaign as utm_campaign,
+        source AS utm_source,
+        medium AS utm_medium,
+        campaign AS utm_campaign,
         lead_id,
         created_at,
         amount,
         closing_reason,
         status_id
-    from tab1
-    where rn = 1 and date(visit_date) <= date(created_at)
-    order by
-        amount desc nulls last,
-        visit_date asc,
-        utm_source asc,
-        utm_medium asc,
-        utm_campaign asc
+    FROM tab1
+    WHERE rn = 1 and date(visit_date) <= date(created_at)
+    ORDER BY
+        amount DESC NULLS LAST,
+        visit_date ASC,
+        utm_source ASC,
+        utm_medium ASC,
+        utm_campaign ASC
 ),
 
-aggregate_lpc as (
-    select
+aggregate_lpc AS (
+    SELECT
         lpc.utm_source,
         lpc.utm_medium,
         lpc.utm_campaign,
-        date(lpc.visit_date) as visit_date,
-        count(lpc.visitor_id) as visitors_count,
-        count(lpc.lead_id) filter (
-            where lpc.visit_date <= lpc.created_at
-        ) as leads_count,
-        count(lpc.closing_reason) filter (
-            where lpc.status_id = 142
-        ) as purchases_count,
+        date(lpc.visit_date) AS visit_date,
+        count(lpc.visitor_id) AS visitors_count,
+        count(lpc.lead_id) FILTER (
+            WHERE lpc.visit_date <= lpc.created_at
+        ) AS leads_count,
+        count(lpc.closing_reason) FILTER (
+            WHERE lpc.status_id = 142
+        ) AS purchases_count,
         sum(lpc.amount) as revenue
-    from last_paid_click as lpc
-    group by
+    FROM last_paid_click as lpc
+    GROUP BY
         date(lpc.visit_date), lpc.utm_source, lpc.utm_medium, lpc.utm_campaign
-    order by revenue desc
+    ORDER BY revenue DESC
 )
 
-select utm_source as source,
-    sum(visitors_count) as visitors_count,
-    sum(leads_count) as leads_count,
+SELECT 
+    utm_source AS source,
+    sum(visitors_count) AS visitors_count,
+    sum(leads_count) AS leads_count,
     round(sum(leads_count) * 100.0 / sum(visitors_count), 2)
-    as vonversion_from_click_to_lead,
-    case
-        when sum(leads_count) > 0 
-        then round(sum(purchases_count) * 100.0 / sum(leads_count), 2)
-        else 0
-    end as Conversion_from_lead_to_payment
-from aggregate_lpc
-group by utm_source;
+    AS vonversion_from_click_to_lead,
+    CASE
+        WHEN sum(leads_count) > 0
+            THEN round(sum(purchases_count) * 100.0 / sum(leads_count), 2)
+        ELSE 0
+    END AS conversion_from_lead_to_payment
+FROM aggregate_lpc
+GROUP BY utm_source;
 
 -- Расчет расходов на рекламу в динамике
 
-with total_ads as (
-    select
+WITH total_ads AS (
+    SELECT
         date(campaign_date) as campaign_date,
         utm_source,
         utm_medium,
         utm_campaign,
         sum(daily_spent) as total_cost
-    from ya_ads
-    group by
+    FROM ya_ads
+    GROUP BY
         date(campaign_date),
         utm_source,
         utm_medium,
         utm_campaign
-    union
-    select
+    UNION
+    SELECT
         date(campaign_date) as campaign_date,
         utm_source,
         utm_medium,
         utm_campaign,
         sum(daily_spent) as total_cost
-    from vk_ads
-    group by
+    FROM vk_ads
+    GROUP BY
         date(campaign_date),
         utm_source,
         utm_medium,
         utm_campaign
-    order by campaign_date
+    ORDER BY campaign_date
 )
 
-select
+SELECT
     campaign_date,
     utm_source,
     utm_medium,
     utm_campaign,
     sum(total_cost) as daily_spent
-from total_ads
-group by
+FROM total_ads
+GROUP BY
     campaign_date,
     utm_source,
     utm_medium,
     utm_campaign
-order by campaign_date;
+ORDER BY campaign_date;
 
 
 -- Расчет метрик по источнику
@@ -175,8 +176,8 @@ order by campaign_date;
 --cppu = total_cost / purchases_count
 --roi = (revenue - total_cost) / total_cost * 100%
 
-with tab1 as (
-    select
+WITH tab1 AS (
+    SELECT
         s.visitor_id,
         s.visit_date,
         s.source,
@@ -189,86 +190,86 @@ with tab1 as (
         l.learning_format,
         l.status_id,
         row_number()
-            over (partition by s.visitor_id order by s.visit_date desc)
-        as rn
-    from sessions as s
-    left join leads as l on s.visitor_id = l.visitor_id
-    where s.medium <> 'organic'
+        OVER (PARTITION BY s.visitor_id ORDER BY s.visit_date DESC)
+        AS rn
+    FROM sessions AS s
+    LEFT JOIN leads AS l on s.visitor_id = l.visitor_id
+    WHERE s.medium != 'organic'
 ),
 
 last_paid_click as (
-    select
+    SELECT
         visitor_id,
         visit_date,
-        source as utm_source,
-        medium as utm_medium,
-        campaign as utm_campaign,
+        source AS utm_source,
+        medium AS utm_medium,
+        campaign AS utm_campaign,
         lead_id,
         created_at,
         amount,
         closing_reason,
         status_id
-    from tab1
-    where rn = 1 and date(visit_date) <= date(created_at)
-    order by
-        amount desc nulls last,
-        visit_date asc,
-        utm_source asc,
-        utm_medium asc,
-        utm_campaign asc
+    FROM tab1
+    WHERE rn = 1 and date(visit_date) <= date(created_at)
+    ORDER BY
+        amount DESC NULLS LAST,
+        visit_date ASC,
+        utm_source ASC,
+        utm_medium ASC,
+        utm_campaign ASC
 ),
 
-aggregate_lpc as (
-    select
+aggregate_lpc AS (
+    SELECT
         lpc.utm_source,
         lpc.utm_medium,
         lpc.utm_campaign,
-        date(lpc.visit_date) as visit_date,
-        count(lpc.visitor_id) as visitors_count,
-        count(lpc.lead_id) filter (
-            where lpc.visit_date <= lpc.created_at
-        ) as leads_count,
-        count(lpc.closing_reason) filter (
-            where lpc.status_id = 142
-        ) as purchases_count,
+        date(lpc.visit_date) AS visit_date,
+        count(lpc.visitor_id) AS visitors_count,
+        count(lpc.lead_id) FILTER (
+            WHERE lpc.visit_date <= lpc.created_at
+        ) AS leads_count,
+        count(lpc.closing_reason) FILTER (
+            WHERE lpc.status_id = 142
+        ) AS purchases_count,
         sum(lpc.amount) as revenue
-    from last_paid_click as lpc
-    group by
+    FROM last_paid_click as lpc
+    GROUP BY
         date(lpc.visit_date), lpc.utm_source, lpc.utm_medium, lpc.utm_campaign
-    order by revenue desc
+    ORDER BY revenue DESC
 ),
 
-ads_tab as (
-    select
+ads_tab AS (
+    SELECT
         date(campaign_date) as campaign_date,
         utm_source,
         utm_medium,
         utm_campaign,
         sum(daily_spent) as total_cost
-    from ya_ads
-    group by
+    FROM ya_ads
+    GROUP BY
         date(campaign_date),
         utm_source,
         utm_medium,
         utm_campaign
-union
-    select
+UNION
+    SELECT
         date(campaign_date) as campaign_date,
         utm_source,
         utm_medium,
         utm_campaign,
         sum(daily_spent) as total_cost
-    from vk_ads
-    group by
+    FROM vk_ads
+    GROUP BY
         date(campaign_date),
         utm_source,
         utm_medium,
         utm_campaign
-    order by campaign_date
+    ORDER BY campaign_date
 ),
 
-aggregated_expenses as (
-    select
+aggregated_expenses AS (
+    SELECT
         agr.visit_date,
         agr.utm_source,
         agr.utm_medium,
@@ -278,32 +279,33 @@ aggregated_expenses as (
         agr.leads_count,
         agr.purchases_count,
         agr.revenue
-    from aggregate_lpc as agr
-    inner join ads_tab as ads
-    on
-        agr.utm_source = ads.utm_source and agr.utm_medium = ads.utm_medium
-        and agr.utm_campaign = ads.utm_campaign
-        and agr.visit_date = ads.campaign_date
-    order by
-    revenue desc nulls last, visit_date asc, visitors_count desc,
-    utm_source asc, utm_medium asc, utm_campaign asc
+    FROM aggregate_lpc AS agr
+    INNER JOIN ads_tab AS ads
+        ON
+            agr.utm_source = ads.utm_source AND agr.utm_medium = ads.utm_medium
+            AND agr.utm_campaign = ads.utm_campaign
+            AND agr.visit_date = ads.campaign_date
+    ORDER BY
+        agr.revenue DESC NULLS LAST, agr.visit_date ASC, agr.visitors_count DESC,
+        agr.utm_source ASC, agr.utm_medium ASC, agr.utm_campaign ASC
 )
 
-select 
-    utm_source, 
-    round(sum(total_cost) / sum(visitors_count), 2) as cpu,
-    round(sum(total_cost) / sum(leads_count), 2) as cpl,
-    round(sum(total_cost) / sum(purchases_count), 2) as cppu,
-    round((sum(revenue) - sum(total_cost)) * 100.0 / sum(total_cost), 2) as roi
-from aggregated_expenses
-group by utm_source;
+SELECT
+    utm_source,
+    round(sum(total_cost) / sum(visitors_count), 2) AS cpu,
+    round(sum(total_cost) / sum(leads_count), 2) AS cpl,
+    round(sum(total_cost) / sum(purchases_count), 2) AS cppu,
+    round((sum(revenue) - sum(total_cost)) * 100.0 / sum(total_cost), 2) AS roi
+FROM aggregated_expenses
+GROUP BY utm_source;
 
 
--- Через какое время после запуска компании маркетинг может анализировать компанию используя ваш дашборд? 
--- Можно посчитать за сколько дней с момента перехода по рекламе закрывается 90% лидов.
+-- Через какое время после запуска компании маркетинг может 
+-- анализировать компанию, используя ваш дашборд? 
+-- (за сколько дней с момента перехода по рекламе закрывается 90% лидов)
 
-with tab1 as (
-    select
+WITH tab1 AS (
+    SELECT
         s.visitor_id,
         s.visit_date,
         s.source,
@@ -316,84 +318,86 @@ with tab1 as (
         l.learning_format,
         l.status_id,
         row_number()
-            over (partition by s.visitor_id order by s.visit_date desc)
-        as rn
-    from sessions as s
-    left join leads as l on s.visitor_id = l.visitor_id
-    where s.medium <> 'organic'
+        OVER (PARTITION BY s.visitor_id ORDER BY s.visit_date DESC)
+        AS rn
+    FROM sessions AS s
+    LEFT JOIN leads AS l on s.visitor_id = l.visitor_id
+    WHERE s.medium != 'organic'
 ),
 
 last_paid_click as (
-    select
+    SELECT
         visitor_id,
         visit_date,
-        source as utm_source,
-        medium as utm_medium,
-        campaign as utm_campaign,
+        source AS utm_source,
+        medium AS utm_medium,
+        campaign AS utm_campaign,
         lead_id,
         created_at,
         amount,
         closing_reason,
         status_id
-    from tab1
-    where rn = 1 and date(visit_date) <= date(created_at)
-    order by
-        amount desc nulls last,
-        visit_date asc,
-        utm_source asc,
-        utm_medium asc,
-        utm_campaign asc
+    FROM tab1
+    WHERE rn = 1 and date(visit_date) <= date(created_at)
+    ORDER BY
+        amount DESC NULLS LAST,
+        visit_date ASC,
+        utm_source ASC,
+        utm_medium ASC,
+        utm_campaign ASC
 ),
 
-days_tab as (
-    select
+days_tab AS (
+    SELECT
         *,
-        (created_at - visit_date) as days_till_lead,
-        ntile(10) over (order by (created_at - visit_date)) as ntl
-    from last_paid_click
-    where status_id = 142
+        (created_at - visit_date) AS days_till_lead,
+        ntile(10) OVER (ORDER BY (created_at - visit_date)) AS ntl
+    FROM last_paid_click
+    WHERE status_id = 142
 )
 
-select max(days_till_lead) as days_90_percent_leads_closed
-from days_tab
-where ntl = 9;
+SELECT max(days_till_lead) as days_90_percent_leads_closed
+FROM days_tab
+WHERE ntl = 9;
 
 
--- Есть ли заметная корреляция между запуском рекламной компании и ростом органики?
+-- Есть ли заметная корреляция между запуском рекламной компании
+-- и ростом органики?
 
-WITH ads_tab as (
-select
-    date(campaign_date) as campaign_date,
-    utm_source,
-    utm_medium,
-    utm_campaign
-from ya_ads
-union
-select
-    date(campaign_date) as campaign_date,
-    utm_source,
-    utm_medium,
-    utm_campaign
-from vk_ads
-order by 1
+WITH ads_tab AS (
+    SELECT
+        date(campaign_date) AS campaign_date,
+        utm_source,
+        utm_medium,
+        utm_campaign
+    FROM ya_ads
+    UNION
+    SELECT
+        date(campaign_date) AS campaign_date,
+        utm_source,
+        utm_medium,
+        utm_campaign
+    FROM vk_ads
+    ORDER BY campaign_date
 ),
 
-campaigns_count as (
-    select
-        date(campaign_date) as campaign_date, 
-        count(utm_campaign) as campaigns_cnt
-    from ads_tab
-    group by 1
+campaigns_count AS (
+    SELECT
+        date(campaign_date) AS campaign_date,
+        count(utm_campaign) AS campaigns_cnt
+    FROM ads_tab
+    GROUP BY date(campaign_date)
 )
 
-select
+SELECT
     cc.campaign_date,
     cc.campaigns_cnt,
-    count(distinct s.visitor_id) as organic_visitors_cnt
-from sessions s
-join campaigns_count cc
-    on
-        date(s.visit_date) = cc.campaign_date and s.medium = 'organic'
-group by
+    count(DISTINCT s.visitor_id) AS organic_visitors_cnt
+FROM sessions AS s
+JOIN campaigns_count AS cc
+    ON
+        date(s.visit_date) = cc.campaign_date AND s.medium = 'organic'
+GROUP BY
 	cc.campaign_date,
     cc.campaigns_cnt;
+
