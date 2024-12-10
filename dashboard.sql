@@ -18,16 +18,16 @@ GROUP BY extract(WEEK FROM visit_date);
 -- Какие каналы их приводят на сайт? Хочется видеть по дням/неделям/месяцам
 -- по дням
 SELECT
-    date(visit_date) AS visit_date,
     source,
+    date(visit_date) AS visit_date,
     count(DISTINCT visitor_id) AS uniq_visitors
 FROM sessions
 GROUP BY date(visit_date), source;
 
 -- по неделям
 SELECT
-    extract(WEEK FROM visit_date) AS visit_week,
     source,
+    extract(WEEK FROM visit_date) AS visit_week,
     count(DISTINCT visitor_id) AS uniq_visitors
 FROM sessions
 GROUP BY extract(WEEK FROM visit_date), source;
@@ -35,8 +35,8 @@ GROUP BY extract(WEEK FROM visit_date), source;
 -- за месяц
 
 SELECT
-    extract(MONTH FROM visit_date) AS visit_month,
     source,
+    extract(MONTH FROM visit_date) AS visit_month,
     count(DISTINCT visitor_id) AS uniq_visitors
 FROM sessions
 GROUP BY extract(MONTH FROM visit_date), source;
@@ -160,7 +160,7 @@ SELECT
     utm_source,
     utm_medium,
     utm_campaign,
-    sum(TOTAL_COST) AS daily_spent
+    sum(total_cost) AS daily_spent
 FROM total_ads
 GROUP BY
     campaign_date,
@@ -252,7 +252,7 @@ ads_tab AS (
         utm_source,
         utm_medium,
         utm_campaign
-UNION
+    UNION
     SELECT
         date(campaign_date) AS campaign_date,
         utm_source,
@@ -398,6 +398,7 @@ FROM sessions AS s
 INNER JOIN campaigns_count AS cc
     ON
         date(s.visit_date) = cc.campaign_date AND s.medium = 'organic'
-GROUP by
+GROUP BY
     cc.campaign_date,
     cc.campaigns_cnt;
+
