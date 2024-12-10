@@ -8,7 +8,7 @@ SELECT
 FROM sessions
 GROUP BY date(visit_date);
 
-SELECT 
+SELECT
     extract(WEEK FROM visit_date) AS visit_week,
     count(DISTINCT visitor_id) AS visitors_count
 FROM sessions
@@ -25,7 +25,7 @@ FROM sessions
 GROUP BY date(visit_date), source;
 
 -- по неделям
-SELECT 
+SELECT
     extract(WEEK FROM visit_date) AS visit_week,
     source,
     count(DISTINCT visitor_id) AS uniq_visitors
@@ -68,7 +68,7 @@ WITH tab1 AS (
     WHERE s.medium != 'organic'
 ),
 
-last_paid_click as (
+last_paid_click AS (
     SELECT
         visitor_id,
         visit_date,
@@ -81,7 +81,7 @@ last_paid_click as (
         closing_reason,
         status_id
     FROM tab1
-    WHERE rn = 1 and date(visit_date) <= date(created_at)
+    WHERE rn = 1 AND date(visit_date) <= date(created_at)
     ORDER BY
         amount DESC NULLS LAST,
         visit_date ASC,
@@ -103,14 +103,14 @@ aggregate_lpc AS (
         count(lpc.closing_reason) FILTER (
             WHERE lpc.status_id = 142
         ) AS purchases_count,
-        sum(lpc.amount) as revenue
-    FROM last_paid_click as lpc
+        sum(lpc.amount) AS revenue
+    FROM last_paid_click AS lpc
     GROUP BY
         date(lpc.visit_date), lpc.utm_source, lpc.utm_medium, lpc.utm_campaign
     ORDER BY revenue DESC
 )
 
-SELECT 
+SELECT
     utm_source AS source,
     sum(visitors_count) AS visitors_count,
     sum(leads_count) AS leads_count,
@@ -128,11 +128,11 @@ GROUP BY utm_source;
 
 WITH total_ads AS (
     SELECT
-        date(campaign_date) as campaign_date,
+        date(campaign_date) AS campaign_date,
         utm_source,
         utm_medium,
         utm_campaign,
-        sum(daily_spent) as total_cost
+        sum(daily_spent) AS total_cost
     FROM ya_ads
     GROUP BY
         date(campaign_date),
@@ -141,11 +141,11 @@ WITH total_ads AS (
         utm_campaign
     UNION
     SELECT
-        date(campaign_date) as campaign_date,
+        date(campaign_date) AS campaign_date,
         utm_source,
         utm_medium,
         utm_campaign,
-        sum(daily_spent) as total_cost
+        sum(daily_spent) AS total_cost
     FROM vk_ads
     GROUP BY
         date(campaign_date),
@@ -160,7 +160,7 @@ SELECT
     utm_source,
     utm_medium,
     utm_campaign,
-    sum(total_cost) as daily_spent
+    sum(TOTAL_COST) AS daily_spent
 FROM total_ads
 GROUP BY
     campaign_date,
@@ -193,11 +193,11 @@ WITH tab1 AS (
         OVER (PARTITION BY s.visitor_id ORDER BY s.visit_date DESC)
         AS rn
     FROM sessions AS s
-    LEFT JOIN leads AS l on s.visitor_id = l.visitor_id
+    LEFT JOIN leads AS l ON s.visitor_id = l.visitor_id
     WHERE s.medium != 'organic'
 ),
 
-last_paid_click as (
+last_paid_click AS (
     SELECT
         visitor_id,
         visit_date,
@@ -210,7 +210,7 @@ last_paid_click as (
         closing_reason,
         status_id
     FROM tab1
-    WHERE rn = 1 and date(visit_date) <= date(created_at)
+    WHERE rn = 1 AND date(visit_date) <= date(created_at)
     ORDER BY
         amount DESC NULLS LAST,
         visit_date ASC,
@@ -232,8 +232,8 @@ aggregate_lpc AS (
         count(lpc.closing_reason) FILTER (
             WHERE lpc.status_id = 142
         ) AS purchases_count,
-        sum(lpc.amount) as revenue
-    FROM last_paid_click as lpc
+        sum(lpc.amount) AS revenue
+    FROM last_paid_click AS lpc
     GROUP BY
         date(lpc.visit_date), lpc.utm_source, lpc.utm_medium, lpc.utm_campaign
     ORDER BY revenue DESC
@@ -241,11 +241,11 @@ aggregate_lpc AS (
 
 ads_tab AS (
     SELECT
-        date(campaign_date) as campaign_date,
+        date(campaign_date) AS campaign_date,
         utm_source,
         utm_medium,
         utm_campaign,
-        sum(daily_spent) as total_cost
+        sum(daily_spent) AS total_cost
     FROM ya_ads
     GROUP BY
         date(campaign_date),
@@ -254,11 +254,11 @@ ads_tab AS (
         utm_campaign
 UNION
     SELECT
-        date(campaign_date) as campaign_date,
+        date(campaign_date) AS campaign_date,
         utm_source,
         utm_medium,
         utm_campaign,
-        sum(daily_spent) as total_cost
+        sum(daily_spent) AS total_cost
     FROM vk_ads
     GROUP BY
         date(campaign_date),
@@ -286,8 +286,9 @@ aggregated_expenses AS (
             AND agr.utm_campaign = ads.utm_campaign
             AND agr.visit_date = ads.campaign_date
     ORDER BY
-        agr.revenue DESC NULLS LAST, agr.visit_date ASC, agr.visitors_count DESC,
-        agr.utm_source ASC, agr.utm_medium ASC, agr.utm_campaign ASC
+        agr.revenue DESC NULLS LAST, agr.visit_date ASC,
+        agr.visitors_count DESC, agr.utm_source ASC,
+        agr.utm_medium ASC, agr.utm_campaign ASC
 )
 
 SELECT
@@ -321,11 +322,11 @@ WITH tab1 AS (
         OVER (PARTITION BY s.visitor_id ORDER BY s.visit_date DESC)
         AS rn
     FROM sessions AS s
-    LEFT JOIN leads AS l on s.visitor_id = l.visitor_id
+    LEFT JOIN leads AS l ON s.visitor_id = l.visitor_id
     WHERE s.medium != 'organic'
 ),
 
-last_paid_click as (
+last_paid_click AS (
     SELECT
         visitor_id,
         visit_date,
@@ -338,7 +339,7 @@ last_paid_click as (
         closing_reason,
         status_id
     FROM tab1
-    WHERE rn = 1 and date(visit_date) <= date(created_at)
+    WHERE rn = 1 AND date(visit_date) <= date(created_at)
     ORDER BY
         amount DESC NULLS LAST,
         visit_date ASC,
@@ -356,7 +357,7 @@ days_tab AS (
     WHERE status_id = 142
 )
 
-SELECT max(days_till_lead) as days_90_percent_leads_closed
+SELECT max(days_till_lead) AS days_90_percent_leads_closed
 FROM days_tab
 WHERE ntl = 9;
 
@@ -394,10 +395,9 @@ SELECT
     cc.campaigns_cnt,
     count(DISTINCT s.visitor_id) AS organic_visitors_cnt
 FROM sessions AS s
-JOIN campaigns_count AS cc
+INNER JOIN campaigns_count AS cc
     ON
         date(s.visit_date) = cc.campaign_date AND s.medium = 'organic'
-GROUP BY
-	cc.campaign_date,
+GROUP by
+    cc.campaign_date,
     cc.campaigns_cnt;
-
