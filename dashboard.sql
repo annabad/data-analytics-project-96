@@ -369,25 +369,26 @@ WITH ads_tab AS (
     SELECT
         date(campaign_date) AS campaign_date,
         utm_source,
-        utm_medium,
-        utm_campaign
+        count(*) AS camp_count
     FROM ya_ads
+    GROUP BY
+        date(campaign_date), utm_source
     UNION
     SELECT
         date(campaign_date) AS campaign_date,
         utm_source,
-        utm_medium,
-        utm_campaign
+        count(*) AS camp_count
     FROM vk_ads
-    ORDER BY campaign_date
+    GROUP BY
+        date(campaign_date), utm_source
 ),
 
 campaigns_count AS (
     SELECT
-        date(campaign_date) AS campaign_date,
-        count(utm_campaign) AS campaigns_cnt
+        campaign_date,
+        sum(camp_count) AS campaigns_cnt
     FROM ads_tab
-    GROUP BY date(campaign_date)
+    GROUP BY campaign_date
 )
 
 SELECT
@@ -395,9 +396,60 @@ SELECT
     cc.campaigns_cnt,
     count(DISTINCT s.visitor_id) AS organic_visitors_cnt
 FROM sessions AS s
-INNER JOIN campaigns_count AS cc
-    ON
-        date(s.visit_date) = cc.campaign_date AND s.medium = 'organic'
+INNER JOIN
+    campaigns_count AS cc
+    ON date(s.visit_date) = cc.campaign_date AND s.medium = 'organic'
 GROUP BY
     cc.campaign_date,
     cc.campaigns_cnt;
+
+
+-- Динамика привлечения по дням и количество рекламных кампаний на Yandex и Vk
+
+WITH campaigns AS (
+    SELECT
+        date(campaign_date) AS campaign_date,
+        utm_source,
+        count(*) AS campaigns_number
+    FROM ya_ads
+    GROUP by
+        date(campaign_date),
+        utm_source
+    UNION
+    SELECT
+        date(campaign_date) AS campaign_date,
+        utm_source,
+        count(*) AS campaigns_number
+    FROM vk_ads
+    GROUP BY
+        date(campaign_date),
+        utm_source
+),
+
+days AS (
+    SELECT DISTINCT
+        c.utm_source,
+        date(s.visit_date) AS v_date
+    FROM sessions AS s
+    CROSS JOIN campaigns AS c
+    ORDER BY v_date
+)
+
+SELECT
+    days.utm_source,
+    days.v_date AS visit_date,
+    count(DISTINCT s.visitor_id) AS unique_visitors,
+    c.campaigns_number
+FROM sessions s
+RIGHT JOIN days
+    ON
+        days.v_date = date(s.visit_date) AND s.source = days.utm_source
+FULL JOIN campaigns AS c
+    ON
+        days.v_date = c.campaign_date
+        AND days.utm_source = c.utm_source
+GROUP BY
+    days.v_date,
+    days.utm_source,
+    c.campaigns_number
+ORDER BY visit_date, days.utm_source;
