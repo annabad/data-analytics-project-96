@@ -412,7 +412,7 @@ WITH campaigns AS (
         utm_source,
         count(*) AS campaigns_number
     FROM ya_ads
-    GROUP by
+    GROUP BY
         date(campaign_date),
         utm_source
     UNION
@@ -438,10 +438,10 @@ days AS (
 SELECT
     days.utm_source,
     days.v_date AS visit_date,
-    count(DISTINCT s.visitor_id) AS unique_visitors,
-    c.campaigns_number
-FROM sessions s
-RIGHT JOIN days
+    c.campaigns_number,
+    count(DISTINCT s.visitor_id) AS unique_visitors
+FROM days
+LEFT JOIN sessions AS s
     ON
         days.v_date = date(s.visit_date) AND s.source = days.utm_source
 FULL JOIN campaigns AS c
