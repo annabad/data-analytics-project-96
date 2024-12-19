@@ -16,7 +16,8 @@ with tab1 as (
         over (partition by s.visitor_id order by s.visit_date desc)
         as rn
     from sessions as s
-    left join leads as l on s.visitor_id = l.visitor_id
+    left join leads as l on s.visitor_id = l.visitor_id 
+        and date(s.visit_date) <= date(l.created_at)
     where s.medium != 'organic'
 ),
 
@@ -33,7 +34,7 @@ last_paid_click as (
         closing_reason,
         status_id
     from tab1
-    where rn = 1 and date(visit_date) <= date(created_at)
+    where rn = 1
     order by
         amount desc nulls last,
         visit_date asc,
@@ -49,9 +50,7 @@ aggregate_lpc as (
         lpc.utm_campaign,
         date(lpc.visit_date) as visit_date,
         count(lpc.visitor_id) as visitors_count,
-        count(lpc.lead_id) filter (
-            where lpc.visit_date <= lpc.created_at
-        ) as leads_count,
+        count(lpc.lead_id) as leads_count,
         count(lpc.closing_reason) filter (
             where lpc.status_id = 142
         ) as purchases_count,
@@ -104,7 +103,8 @@ select
 from aggregate_lpc as agr
 left join ads_tab as ads
     on
-        agr.utm_source = ads.utm_source and agr.utm_medium = ads.utm_medium
+        agr.utm_source = ads.utm_source
+        and agr.utm_medium = ads.utm_medium
         and agr.utm_campaign = ads.utm_campaign
         and agr.visit_date = ads.campaign_date
 order by

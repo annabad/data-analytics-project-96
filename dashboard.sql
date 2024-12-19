@@ -1,50 +1,3 @@
--- Количество пользователей, заходивших на сайт
-SELECT count(DISTINCT visitor_id) AS visitors_count
-FROM sessions;
-
-SELECT
-    date(visit_date) AS visit_date,
-    count(DISTINCT visitor_id) AS visitors_count
-FROM sessions
-GROUP BY date(visit_date);
-
-SELECT
-    extract(WEEK FROM visit_date) AS visit_week,
-    count(DISTINCT visitor_id) AS visitors_count
-FROM sessions
-GROUP BY extract(WEEK FROM visit_date);
-
-
--- Какие каналы их приводят на сайт? Хочется видеть по дням/неделям/месяцам
--- по дням
-SELECT
-    source,
-    date(visit_date) AS visit_date,
-    count(DISTINCT visitor_id) AS uniq_visitors
-FROM sessions
-GROUP BY date(visit_date), source;
-
--- по неделям
-SELECT
-    source,
-    extract(WEEK FROM visit_date) AS visit_week,
-    count(DISTINCT visitor_id) AS uniq_visitors
-FROM sessions
-GROUP BY extract(WEEK FROM visit_date), source;
-
--- за месяц
-
-SELECT
-    source,
-    extract(MONTH FROM visit_date) AS visit_month,
-    count(DISTINCT visitor_id) AS uniq_visitors
-FROM sessions
-GROUP BY extract(MONTH FROM visit_date), source;
-
--- Сколько лидов к нам приходят?
-SELECT count(DISTINCT lead_id)
-FROM leads;
-
 -- Расчет конверсий по модели аттрибуции Last Paid Click
 
 WITH tab1 AS (
@@ -65,6 +18,7 @@ WITH tab1 AS (
         AS rn
     FROM sessions AS s
     LEFT JOIN leads AS l ON s.visitor_id = l.visitor_id
+         AND date(visit_date) <= date(created_at)
     WHERE s.medium != 'organic'
 ),
 
@@ -81,7 +35,7 @@ last_paid_click AS (
         closing_reason,
         status_id
     FROM tab1
-    WHERE rn = 1 AND date(visit_date) <= date(created_at)
+    WHERE rn = 1
     ORDER BY
         amount DESC NULLS LAST,
         visit_date ASC,
@@ -97,9 +51,7 @@ aggregate_lpc AS (
         lpc.utm_campaign,
         date(lpc.visit_date) AS visit_date,
         count(lpc.visitor_id) AS visitors_count,
-        count(lpc.lead_id) FILTER (
-            WHERE lpc.visit_date <= lpc.created_at
-        ) AS leads_count,
+        count(lpc.lead_id) AS leads_count,
         count(lpc.closing_reason) FILTER (
             WHERE lpc.status_id = 142
         ) AS purchases_count,
@@ -123,51 +75,6 @@ SELECT
     END AS conversion_from_lead_to_payment
 FROM aggregate_lpc
 GROUP BY utm_source;
-
--- Расчет расходов на рекламу в динамике
-
-WITH total_ads AS (
-    SELECT
-        date(campaign_date) AS campaign_date,
-        utm_source,
-        utm_medium,
-        utm_campaign,
-        sum(daily_spent) AS total_cost
-    FROM ya_ads
-    GROUP BY
-        date(campaign_date),
-        utm_source,
-        utm_medium,
-        utm_campaign
-    UNION
-    SELECT
-        date(campaign_date) AS campaign_date,
-        utm_source,
-        utm_medium,
-        utm_campaign,
-        sum(daily_spent) AS total_cost
-    FROM vk_ads
-    GROUP BY
-        date(campaign_date),
-        utm_source,
-        utm_medium,
-        utm_campaign
-    ORDER BY campaign_date
-)
-
-SELECT
-    campaign_date,
-    utm_source,
-    utm_medium,
-    utm_campaign,
-    sum(total_cost) AS daily_spent
-FROM total_ads
-GROUP BY
-    campaign_date,
-    utm_source,
-    utm_medium,
-    utm_campaign
-ORDER BY campaign_date;
 
 
 -- Расчет метрик по источнику
@@ -194,6 +101,7 @@ WITH tab1 AS (
         AS rn
     FROM sessions AS s
     LEFT JOIN leads AS l ON s.visitor_id = l.visitor_id
+         AND date(visit_date) <= date(created_at)
     WHERE s.medium != 'organic'
 ),
 
@@ -210,7 +118,7 @@ last_paid_click AS (
         closing_reason,
         status_id
     FROM tab1
-    WHERE rn = 1 AND date(visit_date) <= date(created_at)
+    WHERE rn = 1
     ORDER BY
         amount DESC NULLS LAST,
         visit_date ASC,
@@ -226,9 +134,7 @@ aggregate_lpc AS (
         lpc.utm_campaign,
         date(lpc.visit_date) AS visit_date,
         count(lpc.visitor_id) AS visitors_count,
-        count(lpc.lead_id) FILTER (
-            WHERE lpc.visit_date <= lpc.created_at
-        ) AS leads_count,
+        count(lpc.lead_id) AS leads_count,
         count(lpc.closing_reason) FILTER (
             WHERE lpc.status_id = 142
         ) AS purchases_count,
@@ -282,7 +188,8 @@ aggregated_expenses AS (
     FROM aggregate_lpc AS agr
     INNER JOIN ads_tab AS ads
         ON
-            agr.utm_source = ads.utm_source AND agr.utm_medium = ads.utm_medium
+            agr.utm_source = ads.utm_source
+            AND agr.utm_medium = ads.utm_medium
             AND agr.utm_campaign = ads.utm_campaign
             AND agr.visit_date = ads.campaign_date
     ORDER BY
@@ -323,6 +230,7 @@ WITH tab1 AS (
         AS rn
     FROM sessions AS s
     LEFT JOIN leads AS l ON s.visitor_id = l.visitor_id
+        AND date(visit_date) <= date(created_at)
     WHERE s.medium != 'organic'
 ),
 
@@ -339,7 +247,7 @@ last_paid_click AS (
         closing_reason,
         status_id
     FROM tab1
-    WHERE rn = 1 AND date(visit_date) <= date(created_at)
+    WHERE rn = 1
     ORDER BY
         amount DESC NULLS LAST,
         visit_date ASC,
@@ -361,95 +269,3 @@ SELECT max(days_till_lead) AS days_90_percent_leads_closed
 FROM days_tab
 WHERE ntl = 9;
 
-
--- Есть ли заметная корреляция между запуском рекламной компании
--- и ростом органики?
-
-WITH ads_tab AS (
-    SELECT
-        date(campaign_date) AS campaign_date,
-        utm_source,
-        count(*) AS camp_count
-    FROM ya_ads
-    GROUP BY
-        date(campaign_date), utm_source
-    UNION
-    SELECT
-        date(campaign_date) AS campaign_date,
-        utm_source,
-        count(*) AS camp_count
-    FROM vk_ads
-    GROUP BY
-        date(campaign_date), utm_source
-),
-
-campaigns_count AS (
-    SELECT
-        campaign_date,
-        sum(camp_count) AS campaigns_cnt
-    FROM ads_tab
-    GROUP BY campaign_date
-)
-
-SELECT
-    cc.campaign_date,
-    cc.campaigns_cnt,
-    count(DISTINCT s.visitor_id) AS organic_visitors_cnt
-FROM sessions AS s
-INNER JOIN
-    campaigns_count AS cc
-    ON date(s.visit_date) = cc.campaign_date AND s.medium = 'organic'
-GROUP BY
-    cc.campaign_date,
-    cc.campaigns_cnt;
-
-
--- Динамика привлечения по дням и количество рекламных кампаний на Yandex и Vk
-
-WITH campaigns AS (
-    SELECT
-        date(campaign_date) AS campaign_date,
-        utm_source,
-        count(*) AS campaigns_number
-    FROM ya_ads
-    GROUP BY
-        date(campaign_date),
-        utm_source
-    UNION
-    SELECT
-        date(campaign_date) AS campaign_date,
-        utm_source,
-        count(*) AS campaigns_number
-    FROM vk_ads
-    GROUP BY
-        date(campaign_date),
-        utm_source
-),
-
-days AS (
-    SELECT DISTINCT
-        c.utm_source,
-        date(s.visit_date) AS v_date
-    FROM sessions AS s
-    CROSS JOIN campaigns AS c
-    ORDER BY v_date
-)
-
-SELECT
-    days.utm_source,
-    days.v_date AS visit_date,
-    c.campaigns_number,
-    count(DISTINCT s.visitor_id) AS unique_visitors
-FROM days
-LEFT JOIN sessions AS s
-    ON
-        days.v_date = date(s.visit_date) AND s.source = days.utm_source
-FULL JOIN campaigns AS c
-    ON
-        days.v_date = c.campaign_date
-        AND days.utm_source = c.utm_source
-GROUP BY
-    days.v_date,
-    days.utm_source,
-    c.campaigns_number
-ORDER BY visit_date, days.utm_source;

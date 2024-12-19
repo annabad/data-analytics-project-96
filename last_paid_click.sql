@@ -16,7 +16,8 @@ with tab1 as (
         over (partition by s.visitor_id order by s.visit_date desc)
         as rn
     from sessions as s
-    left join leads as l on s.visitor_id = l.visitor_id
+    left join leads as l on s.visitor_id = l.visitor_id 
+        and date(s.visit_date) <= date(l.created_at)
     where s.medium != 'organic'
 )
 
@@ -32,7 +33,7 @@ select
     closing_reason,
     status_id
 from tab1
-where rn = 1 and date(visit_date) <= date(created_at)
+where rn = 1
 order by
     amount desc nulls last,
     visit_date asc,
