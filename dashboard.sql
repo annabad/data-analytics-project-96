@@ -80,7 +80,7 @@ SELECT
     END AS conversion_from_lead_to_payment
 FROM aggregate_lpc
 GROUP BY utm_source
-order by 5 desc;
+ORDER BY conversion_from_lead_to_payment DESC;
 
 
 -- Расчет метрик по источнику
