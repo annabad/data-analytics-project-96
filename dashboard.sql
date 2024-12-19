@@ -1,4 +1,4 @@
--- Расчет конверсий по модели аттрибуции Last Paid Click
+-- Расчет конверсий по модели атрибуции Last Paid Click
 
 WITH tab1 AS (
     SELECT
@@ -17,8 +17,11 @@ WITH tab1 AS (
         OVER (PARTITION BY s.visitor_id ORDER BY s.visit_date DESC)
         AS rn
     FROM sessions AS s
-    LEFT JOIN leads AS l ON s.visitor_id = l.visitor_id
-         AND date(visit_date) <= date(created_at)
+    LEFT JOIN
+        leads AS l
+        ON
+            s.visitor_id = l.visitor_id
+            AND date(s.visit_date) <= date(l.created_at)
     WHERE s.medium != 'organic'
 ),
 
@@ -51,7 +54,9 @@ aggregate_lpc AS (
         lpc.utm_campaign,
         date(lpc.visit_date) AS visit_date,
         count(lpc.visitor_id) AS visitors_count,
-        count(lpc.lead_id) AS leads_count,
+        count(lpc.lead_id) FILTER (
+            WHERE lpc.visit_date <= lpc.created_at
+        ) AS leads_count,
         count(lpc.closing_reason) FILTER (
             WHERE lpc.status_id = 142
         ) AS purchases_count,
@@ -67,14 +72,15 @@ SELECT
     sum(visitors_count) AS visitors_count,
     sum(leads_count) AS leads_count,
     round(sum(leads_count) * 100.0 / sum(visitors_count), 2)
-    AS vonversion_from_click_to_lead,
+    AS conversion_from_click_to_lead,
     CASE
         WHEN sum(leads_count) > 0
             THEN round(sum(purchases_count) * 100.0 / sum(leads_count), 2)
         ELSE 0
     END AS conversion_from_lead_to_payment
 FROM aggregate_lpc
-GROUP BY utm_source;
+GROUP BY utm_source
+order by 5 desc;
 
 
 -- Расчет метрик по источнику
@@ -100,8 +106,11 @@ WITH tab1 AS (
         OVER (PARTITION BY s.visitor_id ORDER BY s.visit_date DESC)
         AS rn
     FROM sessions AS s
-    LEFT JOIN leads AS l ON s.visitor_id = l.visitor_id
-         AND date(visit_date) <= date(created_at)
+    LEFT JOIN
+        leads AS l
+        ON
+            s.visitor_id = l.visitor_id
+            AND date(s.visit_date) <= date(l.created_at)
     WHERE s.medium != 'organic'
 ),
 
@@ -134,7 +143,9 @@ aggregate_lpc AS (
         lpc.utm_campaign,
         date(lpc.visit_date) AS visit_date,
         count(lpc.visitor_id) AS visitors_count,
-        count(lpc.lead_id) AS leads_count,
+        count(lpc.lead_id) FILTER (
+            WHERE lpc.visit_date <= lpc.created_at
+        ) AS leads_count,
         count(lpc.closing_reason) FILTER (
             WHERE lpc.status_id = 142
         ) AS purchases_count,
@@ -229,9 +240,11 @@ WITH tab1 AS (
         OVER (PARTITION BY s.visitor_id ORDER BY s.visit_date DESC)
         AS rn
     FROM sessions AS s
-    LEFT JOIN leads AS l ON s.visitor_id = l.visitor_id
-        AND date(visit_date) <= date(created_at)
-    WHERE s.medium != 'organic'
+    LEFT JOIN
+        leads AS l
+        ON
+            s.visitor_id = l.visitor_id
+            AND date(s.visit_date) <= date(l.created_at)
 ),
 
 last_paid_click AS (
@@ -268,4 +281,3 @@ days_tab AS (
 SELECT max(days_till_lead) AS days_90_percent_leads_closed
 FROM days_tab
 WHERE ntl = 9;
-

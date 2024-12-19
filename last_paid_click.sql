@@ -16,8 +16,11 @@ with tab1 as (
         over (partition by s.visitor_id order by s.visit_date desc)
         as rn
     from sessions as s
-    left join leads as l on s.visitor_id = l.visitor_id 
-        and date(s.visit_date) <= date(l.created_at)
+    left join
+        leads as l
+        on
+            s.visitor_id = l.visitor_id
+            and date(s.visit_date) <= date(l.created_at)
     where s.medium != 'organic'
 )
 

@@ -13,11 +13,17 @@ with tab1 as (
         l.learning_format,
         l.status_id,
         row_number()
-        over (partition by s.visitor_id order by s.visit_date desc)
+            over (
+                partition by s.visitor_id
+                order by s.visit_date desc
+            )
         as rn
     from sessions as s
-    left join leads as l on s.visitor_id = l.visitor_id 
-        and date(s.visit_date) <= date(l.created_at)
+    left join
+        leads as l
+        on
+            s.visitor_id = l.visitor_id
+            and date(s.visit_date) <= date(l.created_at)
     where s.medium != 'organic'
 ),
 
@@ -50,7 +56,9 @@ aggregate_lpc as (
         lpc.utm_campaign,
         date(lpc.visit_date) as visit_date,
         count(lpc.visitor_id) as visitors_count,
-        count(lpc.lead_id) as leads_count,
+        count(lpc.lead_id) filter (
+            where lpc.visit_date <= lpc.created_at
+        ) as leads_count,
         count(lpc.closing_reason) filter (
             where lpc.status_id = 142
         ) as purchases_count,
@@ -87,7 +95,6 @@ ads_tab as (
         utm_source,
         utm_medium,
         utm_campaign
-    order by date(campaign_date)
 )
 
 select
